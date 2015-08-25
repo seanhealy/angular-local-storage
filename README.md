@@ -1,6 +1,6 @@
 angular-local-storage
 =====================
-An Angular module that gives you access to the browsers local storage, **v0.1.5**
+An Angular module that gives you access to the browsers local storage, **v0.2.1**
 
 [![NPM version][npm-image]][npm-url]
 [![Build status][travis-image]][travis-url]
@@ -12,6 +12,7 @@ An Angular module that gives you access to the browsers local storage, **v0.1.5*
 ##Table of contents:
 - [![Gitter][gitter-image]][gitter-url]
 - [Get Started](#get-started)
+- [Video Tutorial](https://www.youtube.com/watch?v=I4iB0kOSmx8)
 - [Development](#development)
 - [Configuration](#configuration)
  - [setPrefix](#setprefix)
@@ -195,7 +196,7 @@ myApp.controller('MainCtrl', function($scope, localStorageService) {
 });
 ```
 ###remove
-Remove an item from local storage by key.<br/>
+Remove an item(s) from local storage by key.<br/>
 If local storage is not supported, use cookies instead.<br/>
 **Returns:** `Boolean`
 ```js
@@ -205,6 +206,9 @@ myApp.controller('MainCtrl', function($scope, localStorageService) {
    return localStorageService.remove(key);
   }
   //...
+  function removeItems(key1, key2, key3) {
+   return localStorageService.remove(key1, key2, key3);
+  }
 });
 ```
 ###clearAll
@@ -303,6 +307,11 @@ myApp.controller('MainCtrl', function($scope, localStorageService) {
   //...
 });
 ```
+**Cookie Expiry** Pass a third argument to specify number of days to expiry
+```js
+    localStorageService.cookie.set(key,val,10)
+```
+sets a cookie that expires in 10 days.
 ###cookie.get
 Directly get a value from a cookie.<br/>
 **Returns:** `value from local storage`

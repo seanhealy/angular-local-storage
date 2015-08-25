@@ -109,8 +109,6 @@ angularLocalStorage.provider('localStorageService', function() {
       }
     }());
 
-
-
     // Directly adds a value to local storage
     // If local storage is not available in the browser use cookies
     // Example use: localStorageService.add('library','angular');
@@ -118,7 +116,7 @@ angularLocalStorage.provider('localStorageService', function() {
       // Let's convert undefined values to null to get the value consistent
       if (isUndefined(value)) {
         value = null;
-      } else if (isObject(value) || isArray(value) || isNumber(+value || value)) {
+      } else {
         value = toJson(value);
       }
 
@@ -165,37 +163,44 @@ angularLocalStorage.provider('localStorageService', function() {
         return null;
       }
 
-      if (item.charAt(0) === "{" || item.charAt(0) === "[" || isStringNumber(item)) {
-        return fromJson(item);
+      try {
+        return JSON.parse(item);
+      } catch (e) {
+        return item;
       }
-
-      return item;
     };
 
     // Remove an item from local storage
     // Example use: localStorageService.remove('library'); // removes the key/value pair of library='angular'
-    var removeFromLocalStorage = function (key) {
-      if (!browserSupportsLocalStorage || self.storageType === 'cookie') {
-        if (!browserSupportsLocalStorage) {
-          $rootScope.$broadcast('LocalStorageModule.notification.warning', 'LOCAL_STORAGE_NOT_SUPPORTED');
-        }
+    var removeFromLocalStorage = function () {
+      var i, key;
+      for (i=0; i<arguments.length; i++) {
+        key = arguments[i];
+        if (!browserSupportsLocalStorage || self.storageType === 'cookie') {
+          if (!browserSupportsLocalStorage) {
+            $rootScope.$broadcast('LocalStorageModule.notification.warning', 'LOCAL_STORAGE_NOT_SUPPORTED');
+          }
 
-        if (notify.removeItem) {
-          $rootScope.$broadcast('LocalStorageModule.notification.removeitem', {key: key, storageType: 'cookie'});
+          if (notify.removeItem) {
+            $rootScope.$broadcast('LocalStorageModule.notification.removeitem', {key: key, storageType: 'cookie'});
+          }
+          removeFromCookies(key);
         }
-        return removeFromCookies(key);
-      }
-
-      try {
-        webStorage.removeItem(deriveQualifiedKey(key));
-        if (notify.removeItem) {
-          $rootScope.$broadcast('LocalStorageModule.notification.removeitem', {key: key, storageType: self.storageType});
+        else {
+          try {
+            webStorage.removeItem(deriveQualifiedKey(key));
+            if (notify.removeItem) {
+              $rootScope.$broadcast('LocalStorageModule.notification.removeitem', {
+                key: key,
+                storageType: self.storageType
+              });
+            }
+          } catch (e) {
+            $rootScope.$broadcast('LocalStorageModule.notification.error', e.message);
+            removeFromCookies(key);
+          }
         }
-      } catch (e) {
-        $rootScope.$broadcast('LocalStorageModule.notification.error', e.message);
-        return removeFromCookies(key);
       }
-      return true;
     };
 
     // Return array of keys for local storage
@@ -272,7 +277,7 @@ angularLocalStorage.provider('localStorageService', function() {
     // Directly adds a value to cookies
     // Typically used as a fallback is local storage is not available in the browser
     // Example use: localStorageService.cookie.add('library','angular');
-    var addToCookies = function (key, value) {
+    var addToCookies = function (key, value, daysToExpiry) {
 
       if (isUndefined(value)) {
         return false;
@@ -295,6 +300,9 @@ angularLocalStorage.provider('localStorageService', function() {
           expiryDate.setTime(expiryDate.getTime() + (-1 * 24 * 60 * 60 * 1000));
           expiry = "; expires=" + expiryDate.toGMTString();
           value = '';
+        } else if (isNumber(daysToExpiry) && daysToExpiry !== 0) {
+          expiryDate.setTime(expiryDate.getTime() + (daysToExpiry * 24 * 60 * 60 * 1000));
+          expiry = "; expires=" + expiryDate.toGMTString();
         } else if (cookie.expiry !== 0) {
           expiryDate.setTime(expiryDate.getTime() + (cookie.expiry * 24 * 60 * 60 * 1000));
           expiry = "; expires=" + expiryDate.toGMTString();
@@ -329,10 +337,9 @@ angularLocalStorage.provider('localStorageService', function() {
         }
         if (thisCookie.indexOf(deriveQualifiedKey(key) + '=') === 0) {
           var storedValues = decodeURIComponent(thisCookie.substring(prefix.length + key.length + 1, thisCookie.length))
-          try{
-            var obj = JSON.parse(storedValues);
-            return fromJson(obj)
-          }catch(e){
+          try {
+            return JSON.parse(storedValues);
+          } catch(e) {
             return storedValues
           }
         }

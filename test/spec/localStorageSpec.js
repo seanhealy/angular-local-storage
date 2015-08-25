@@ -85,6 +85,15 @@ describe('localStorageService', function() {
     };
   }
 
+  function expectCookieExpiry(exp) {
+    return function($document, localStorageService) {
+      localStorageService.cookie.set('foo','bar',10); //Should trigger first time
+      // Just compare the expiry date, not the time, because of daylight savings
+      var expiryStringPartial = exp.substr(0, exp.indexOf(new Date().getFullYear()));
+      expect($document.cookie.indexOf('expires=' + expiryStringPartial)).not.toEqual(-1);
+    };
+  }
+
   //Provider
   function setPrefix(prefix) {
     return function(localStorageServiceProvider) {
@@ -134,7 +143,7 @@ describe('localStorageService', function() {
 
   it('should add key to localeStorage with initial prefix(ls)', inject(
     addItem('foo', 'bar'),
-    expectAdding('ls.foo', 'bar')
+    expectAdding('ls.foo', '"bar"')
   ));
 
   it('should add key to localeStorage null if value not provided', inject(
@@ -146,7 +155,7 @@ describe('localStorageService', function() {
     module(setPrefix('myApp'));
     inject(
       addItem('foo', 'bar'),
-      expectAdding('myApp.foo', 'bar')
+      expectAdding('myApp.foo', '"bar"')
     );
   });
 
@@ -154,7 +163,7 @@ describe('localStorageService', function() {
     module(setPrefix(''));
     inject(
       addItem('foo', 'bar'),
-      expectAdding('foo', 'bar')
+      expectAdding('foo', '"bar"')
     );
   });
 
@@ -196,6 +205,15 @@ describe('localStorageService', function() {
     );
   });
 
+  it('should be able to set and get objects contains boolean-like strings - issue #225', function() {
+    var t = {x: 'true', y: 'false'};
+    inject(
+      addItem('key', t),
+      expectAdding('ls.key', angular.toJson(t)),
+      expectMatching('key', t)
+    );
+  });
+
   it('should be able to set and get integers', function() {
     inject(
       addItem('key', 777),
@@ -212,10 +230,34 @@ describe('localStorageService', function() {
     );
   });
 
+  it('should be able to set and get booleans', function() {
+    inject(
+        addItem('key', true),
+        expectAdding('ls.key', angular.toJson(true)),
+        expectMatching('key', true)
+    );
+  });
+
+  it('should be able to set and get boolean-like strings', function() {
+    inject(
+      addItem('key', 'true'),
+      expectAdding('ls.key', angular.toJson('true')),
+      expectMatching('key', 'true')
+    );
+  });
+
+  it('should be able to set and get null-like strings', function() {
+    inject(
+      addItem('key', 'null'),
+      expectAdding('ls.key', angular.toJson('null')),
+      expectMatching('key', 'null')
+    );
+  });
+
   it('should be able to set and get strings', function() {
     inject(
       addItem('key', 'string'),
-      expectAdding('ls.key', 'string'),
+      expectAdding('ls.key', '"string"'),
       expectMatching('key', 'string')
     );
   });
@@ -237,6 +279,16 @@ describe('localStorageService', function() {
     removeItem('lorem.ipsum'),
     expectRemoving('ls.lorem.ipsum')
   ));
+
+  it('should be able to remove multiple items', inject(function($window, localStorageService) {
+    elmSpy = spyOn($window.localStorage, 'removeItem').andCallThrough();
+    localStorageService.remove('lorem.ipsum1', 'lorem.ipsum2', 'lorem.ipsum3');
+
+    expect(elmSpy.calls.length).toEqual(3);
+    expect(elmSpy).toHaveBeenCalledWith('ls.lorem.ipsum1');
+    expect(elmSpy).toHaveBeenCalledWith('ls.lorem.ipsum2');
+    expect(elmSpy).toHaveBeenCalledWith('ls.lorem.ipsum3');
+  }));
 
   it('should be able only to remove owned keys', inject(function($window, localStorageService) {
     localStorageService.set('appKey', 'appValue');
@@ -293,7 +345,7 @@ describe('localStorageService', function() {
       var spy = spyOn($rootScope, '$broadcast');
 
       localStorageService.set('a8m', 'foobar');
-      localStorageService.remove('a8m', 'foobar');
+      localStorageService.remove('a8m');
       expect(spy.callCount).toEqual(2);
     });
   });
@@ -430,7 +482,7 @@ describe('localStorageService', function() {
         expect(localStorageService.get('key' + l)).toEqual(null);
         expect($window.localStorage.getItem('key' + l)).toEqual(null);
         expect(localStorageService.get('otherKey' + l)).toEqual('val' + l);
-        expect($window.localStorage.getItem('otherKey' + l)).toEqual('val' + l);
+        expect($window.localStorage.getItem('otherKey' + l)).toEqual('"val' + l + '"');
       }
     });
   });
@@ -445,6 +497,19 @@ describe('localStorageService', function() {
     }
     localStorageService.keys().forEach(function(el, i) {
       expect(el).toEqual('ownKey' + i);
+    });
+  }));
+
+  // Backward compatibility issue-#230
+  it('should return the item as-is if the parsing fail', inject(function($window, localStorageService) {
+    var items = ['{', '[', 'foo'];
+    //set keys
+    items.forEach(function(item, i) {
+      $window.localStorage.setItem('ls.' + i, item);
+    });
+
+    items.forEach(function(item, i) {
+      expect(localStorageService.get(i)).toEqual(item);
     });
   }));
 
@@ -469,7 +534,7 @@ describe('localStorageService', function() {
         localStorageService.get('foo');
         localStorageService.remove('foo');
 
-        expect(setSpy).toHaveBeenCalledWith('ls.foo', 'bar');
+        expect(setSpy).toHaveBeenCalledWith('ls.foo', '"bar"');
         expect(getSpy).toHaveBeenCalledWith('ls.foo');
         expect(removeSpy).toHaveBeenCalledWith('ls.foo');
 
@@ -534,6 +599,10 @@ describe('localStorageService', function() {
       localStorageService.set('cookieKey', 'cookieValue');
       expect(localStorageService.get('cookieKey')).toEqual('cookieValue');
     }));
+
+    it('should be able to set individual cookie with expiry', function() {
+      inject(expectCookieExpiry(new Date().addDays(10)));
+    });
 
     it('should be able to remove from cookie', inject(function(localStorageService) {
       localStorageService.set('cookieKey', 'cookieValue');
